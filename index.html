@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TakeMark</title>
+  <meta name="description" content="Пакетное сканирование марок Честный ЗНАК (МДЛП) камерой телефона">
+  <meta name="theme-color" content="#0f6b5c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="TakeMark">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>TakeMark</h1>
+        <p class="sub">Марки Честный ЗНАК · МДЛП</p>
+      </div>
+    </div>
+    <div class="counter" aria-live="polite"><b id="count">0</b><span>марок</span></div>
+  </header>
+
+  <!-- Подсказка для iPhone -->
+  <section id="ios-hint" class="hint" hidden>
+    <p class="hint-title">Установите TakeMark на экран «Домой»</p>
+    <p>Иначе iPhone может удалить историю сканирования, если приложение не открывать 7 дней. Установленное приложение работает и без интернета.</p>
+    <ol>
+      <li>Нажмите
+        <svg class="ico-inline" viewBox="0 0 24 24" aria-label="Поделиться"><path d="M12 3v12M12 3 8 7M12 3l4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        «Поделиться» в панели Safari</li>
+      <li>Выберите «На экран „Домой“»</li>
+      <li>Нажмите «Добавить» и открывайте TakeMark с иконки</li>
+    </ol>
+    <button id="ios-hint-close" class="btn btn-ghost btn-sm" type="button">Понятно</button>
+  </section>
+
+  <main>
+    <!-- Сканер -->
+    <section class="scan card">
+      <div id="viewport" class="viewport">
+        <video id="video" playsinline muted></video>
+        <div class="frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div id="scan-idle" class="scan-idle">
+          <button id="btn-scan" class="btn btn-primary btn-lg" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h2v2H8zM14 9h2v2h-2zM8 13h2v2H8zM12 12h1M14 14h2v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Сканировать
+          </button>
+          <p id="scan-status" class="muted small">Наведите камеру на код DataMatrix на упаковке</p>
+        </div>
+        <div class="scan-controls" id="scan-controls" hidden>
+          <button id="btn-torch" class="chip" type="button" hidden>Фонарик</button>
+          <label id="zoom-wrap" class="zoom" hidden>Зум <input id="zoom" type="range" min="1" max="4" step="0.1" value="1"></label>
+          <button id="btn-stop" class="chip chip-dark" type="button">Стоп</button>
+        </div>
+      </div>
+      <div id="toast" class="toast" role="status" aria-live="assertive"></div>
+
+      <form id="manual" class="manual" autocomplete="off">
+        <label for="manual-input" class="small muted">Ручной ввод, если марка не читается</label>
+        <div class="row">
+          <input id="manual-input" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 placeholder="01046…21… или полный код">
+          <button class="btn btn-secondary" type="submit">Добавить</button>
+        </div>
+        <p id="manual-error" class="error small" hidden></p>
+      </form>
+    </section>
+
+    <!-- Текущая сессия -->
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>Текущая сессия</h2>
+          <p id="session-meta" class="muted small"></p>
+        </div>
+        <button id="btn-more" class="icon-btn" type="button" aria-label="Действия со списком">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+        </button>
+      </div>
+      <ol id="list" class="list" reversed></ol>
+      <p id="empty" class="empty muted">Список пуст. Отсканируйте первую марку.</p>
+    </section>
+
+    <!-- История -->
+    <section class="card" id="history-card" hidden>
+      <h2>История</h2>
+      <p class="muted small">Хранятся 3 последние сессии, включая текущую.</p>
+      <ul id="history" class="history"></ul>
+    </section>
+
+    <p class="privacy muted small">Данные хранятся только на этом устройстве и никуда не передаются без вашего действия.</p>
+  </main>
+
+  <footer class="bar">
+    <button id="btn-send" class="btn btn-primary btn-block" type="button" disabled>Отправить</button>
+  </footer>
+
+  <!-- Действия со списком -->
+  <dialog id="dlg-more" class="sheet">
+    <form method="dialog">
+      <h3>Список</h3>
+      <button class="btn btn-secondary btn-block" value="download" type="submit">Скачать .txt</button>
+      <button class="btn btn-secondary btn-block" value="new" type="submit">Новая сессия</button>
+      <button class="btn btn-danger btn-block" value="clear" type="submit">Очистить список</button>
+      <button class="btn btn-ghost btn-block" value="cancel" type="submit">Отмена</button>
+    </form>
+  </dialog>
+
+  <!-- Отправка -->
+  <dialog id="dlg-send" class="sheet">
+    <form id="send-form" method="dialog" novalidate>
+      <h3 id="send-title">Отправить</h3>
+      <fieldset class="emails" id="email-list"></fieldset>
+      <label for="email-new" class="small muted">Новый адрес</label>
+      <input id="email-new" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="manager@company.ru">
+      <p id="send-error" class="error small" hidden></p>
+      <p id="send-note" class="muted small" hidden></p>
+
+      <button id="btn-mail" class="btn btn-primary btn-block" type="button">Отправить письмом</button>
+      <p class="muted small center">Откроется почта с адресом и кодами в тексте письма</p>
+      <button id="btn-share" class="btn btn-secondary btn-block" type="button">Поделиться файлом .txt</button>
+      <p class="muted small center">Адрес скопируется — вставьте его в поле «Кому»</p>
+      <button id="btn-download" class="btn btn-ghost btn-block" type="button">Скачать .txt</button>
+      <button class="btn btn-ghost btn-block" value="cancel" type="submit">Закрыть</button>
+    </form>
+  </dialog>
+
+  <!-- Подтверждение -->
+  <dialog id="dlg-confirm" class="sheet">
+    <form method="dialog">
+      <p id="confirm-text"></p>
+      <button id="confirm-ok" class="btn btn-danger btn-block" value="ok" type="submit">Да</button>
+      <button class="btn btn-ghost btn-block" value="cancel" type="submit">Отмена</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

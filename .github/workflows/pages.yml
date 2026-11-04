@@ -1,0 +1,60 @@
+# Публикация TakeMark на GitHub Pages.
+# При каждой сборке библиотека распознавания zxing-wasm копируется в ./vendor,
+# чтобы приложение не зависело от CDN и работало офлайн.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Vendor zxing-wasm
+        run: |
+          set -e
+          mkdir -p /tmp/zx && cd /tmp/zx
+          npm init -y >/dev/null
+          npm i zxing-wasm@2 --no-audit --no-fund
+          D=node_modules/zxing-wasm/dist
+          JS=$(find "$D" -path '*iife*' -path '*reader*' -name 'index.js' | head -1)
+          WASM=$(find "$D" -name 'zxing_reader.wasm' | head -1)
+          test -n "$JS" && test -n "$WASM"
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p vendor
+          cp "/tmp/zx/$JS" vendor/zxing-reader.js
+          cp "/tmp/zx/$WASM" vendor/zxing_reader.wasm
+          echo '["zxing-reader.js","zxing_reader.wasm"]' > vendor/files.json
+          ls -la vendor
+
+      - name: Run parser tests
+        run: node tests/gs1.test.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
