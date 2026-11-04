@@ -38,6 +38,8 @@ expectOk('только 01+21 (ручной ввод)', `01${GTIN}21${SN}`);
 expectOk('с пробелами и переводом строки', `  01${GTIN}21${SN}\n`);
 expectOk('с 17 и 10 перед 21', `01${GTIN}17271231` + `10SERIES1${GS}21${SN}${GS}91${KEY91}${GS}92${CRYPTO}`);
 expectOk('короткий SN медизделия с GS', `01${GTIN}21ABC123${GS}91${KEY91}${GS}92${CRYPTO}`, GTIN, 'ABC123');
+expectOk('короткий криптохвост 93 (медизделия/БАД)', `01${GTIN}21${SN}${GS}93abCD`);
+expectOk('93 без GS', `01${GTIN}21${SN}93abCD`);
 expectOk('FNC1 как «è»', `01${GTIN}21${SN}è91${KEY91}è92${CRYPTO}`);
 
 console.log('Не коды маркировки');

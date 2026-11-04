@@ -1,6 +1,9 @@
 import { parseCode } from './gs1.js';
 import { store, requestPersistence } from './storage.js';
 import { Scanner, loadDecoder } from './scanner.js';
+import { loadDmtx } from './dmtx.js';
+import { decodePhoto } from './photo.js';
+import { rgbaToGray } from './imgproc.js';
 import { makeFile, mailtoUrl, isEmail, formatDateTime, formatTime, fileName, buildText } from './export.js';
 
 const MAX_SESSIONS = 3;   // всего, включая текущую
@@ -115,11 +118,11 @@ function addCode(raw, source) {
     if (lastSeen.size > 500) lastSeen.clear();
   }
 
-  if (!r.ok) { feedback('err', r.error, source === 'scan'); return r; }
+  if (!r.ok) { feedback('err', r.error, source !== 'manual'); return r; }
 
   const s = current();
   if (s.items.some(i => i.key === r.key)) {
-    feedback('dup', 'Уже в списке: ' + r.sn, source === 'scan');
+    feedback('dup', 'Уже в списке: ' + r.sn, source !== 'manual');
     return { ...r, dup: true };
   }
   s.items.push({ key: r.key, gtin: r.gtin, sn: r.sn, line: r.line, ts: now, src: source });
@@ -171,6 +174,7 @@ function render() {
     body.append(el('span', 'sn', it.sn));
     const meta = el('span', 'meta', `GTIN ${it.gtin} · ${formatTime(it.ts)}`);
     if (it.src === 'manual') meta.append(el('em', 'tag', 'вручную'));
+    if (it.src === 'photo') meta.append(el('em', 'tag', 'фото'));
     body.append(meta);
     li.append(body);
     const del = el('button', 'icon-btn del');
@@ -433,6 +437,54 @@ function cameraErrorText(err) {
     (navigator.onLine ? '' : '. Нет интернета: при первом запуске сканеру нужна сеть, чтобы загрузить декодер.');
 }
 
+/* ---------- распознавание по фото ---------- */
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось открыть фото')); };
+    img.src = url; // <img> учитывает EXIF-поворот
+  });
+}
+
+async function onPhoto(file) {
+  if (!file) return;
+  unlockAudio();
+  const label = $('#photo-label');
+  const btn = $('.photo-btn');
+  btn.classList.add('busy');
+  label.textContent = 'Распознаю фото…';
+  try {
+    const img = await loadImage(file);
+    const maxSide = 2000;
+    const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+    const gray = rgbaToGray(ctx.getImageData(0, 0, w, h).data, w, h);
+    let zxingRead = null;
+    try { zxingRead = await loadDecoder(); } catch { /* только libdmtx */ }
+    await loadDmtx();
+    const r = await decodePhoto(gray, w, h, {
+      zxingRead,
+      budgetMs: 15000,
+      onProgress: (n) => { label.textContent = `Распознаю фото… (${n})`; },
+    });
+    if (r) addCode(r.text, 'photo');
+    else feedback('err', 'Код на фото не прочитан. Снимите ближе, код в центре, без бликов — или введите вручную.');
+  } catch (err) {
+    feedback('err', err?.message || 'Ошибка распознавания фото');
+  } finally {
+    btn.classList.remove('busy');
+    label.textContent = 'Сфотографировать марку';
+    $('#photo-input').value = '';
+  }
+}
+
 /* ---------- iPhone: подсказка «На экран Домой» ---------- */
 
 function isIOS() {
@@ -474,6 +526,7 @@ async function init() {
     const on = !scanner?.torchOn;
     try { if (await scanner.setTorch(on)) $('#btn-torch').classList.toggle('on', on); } catch { /* */ }
   };
+  $('#photo-input').onchange = (e) => onPhoto(e.target.files?.[0]);
   $('#zoom').oninput = (e) => scanner?.setZoom(+e.target.value).catch(() => {});
 
   $('#manual').onsubmit = (e) => {
@@ -510,7 +563,7 @@ async function init() {
     navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW', err));
   }
   // загружаем декодер заранее, чтобы он попал в кеш для офлайна
-  const warm = () => loadDecoder().catch(() => {});
+  const warm = () => { loadDecoder().catch(() => {}); loadDmtx().catch(() => {}); };
   ('requestIdleCallback' in window) ? requestIdleCallback(warm, { timeout: 3000 }) : setTimeout(warm, 1500);
 }
 

@@ -1,6 +1,6 @@
 // Service Worker: офлайн-работа TakeMark.
 // При изменении файлов приложения увеличьте VERSION.
-const VERSION = 'takemark-v1';
+const VERSION = 'takemark-v2';
 const RUNTIME = 'takemark-runtime';
 
 const SHELL = [
@@ -12,6 +12,10 @@ const SHELL = [
   './js/storage.js',
   './js/scanner.js',
   './js/export.js',
+  './js/dmtx.js',
+  './js/imgproc.js',
+  './js/photo.js',
+  './wasm/dmtx.wasm',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

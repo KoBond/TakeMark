@@ -1,6 +1,20 @@
-// Камера + декодер DataMatrix (zxing-wasm).
-// Сначала пробуем локальную копию библиотеки в ./vendor (её кладёт сборка GitHub Actions),
-// иначе берём с CDN. Service Worker кеширует оба варианта для офлайна.
+// Камера + два декодера DataMatrix:
+//  - zxing-wasm: быстрый, для обычных печатных кодов. Локальная копия в ./vendor (кладёт сборка
+//    GitHub Actions), иначе CDN. Service Worker кеширует оба варианта для офлайна.
+//  - libdmtx (wasm/dmtx.wasm, лежит в репозитории): читает точечные коды на крышках и флаконах.
+// Если zxing не загрузился, сканер работает на одном libdmtx.
+
+import { rgbaToGray, scale, applyFilter } from './imgproc.js';
+import { loadDmtx, dmtxDecodeGray } from './dmtx.js';
+
+const DMTX_PASSES = [
+  { size: 480, filter: 'plain' },
+  { size: 480, filter: 'min3' },
+  { size: 360, filter: 'blur' },
+  { size: 640, filter: 'min3' },
+  { size: 360, filter: 'plain' },
+  { size: 480, filter: 'min5' },
+];
 
 const CDN_JS = 'https://cdn.jsdelivr.net/npm/zxing-wasm@2/dist/iife/reader/index.js';
 
@@ -90,8 +104,11 @@ export class Scanner {
 
   async start() {
     if (this.running) return;
-    const read = await loadDecoder();
-    this.read = read;
+    const [zx, dm] = await Promise.allSettled([loadDecoder(), loadDmtx()]);
+    this.read = zx.status === 'fulfilled' ? zx.value : null;
+    this.hasDmtx = dm.status === 'fulfilled';
+    if (!this.read && !this.hasDmtx) throw (zx.reason || dm.reason);
+    this.pass = 0;
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('Браузер не даёт доступ к камере. Откройте сайт по HTTPS в Safari или Chrome.');
     }
@@ -168,7 +185,17 @@ export class Scanner {
     if (this.canvas.width !== out) { this.canvas.width = out; this.canvas.height = out; }
     this.ctx.drawImage(v, sx, sy, side, side, 0, 0, out, out);
     const img = this.ctx.getImageData(0, 0, out, out);
-    const texts = await this.read(img);
-    for (const t of texts) this.onCode?.(t);
+    if (this.read) {
+      const texts = await this.read(img);
+      if (texts.length) { for (const t of texts) this.onCode?.(t); return; }
+    }
+    if (!this.hasDmtx) return;
+    // точечные коды: каждый кадр — свой вариант масштаба и фильтра
+    const p = DMTX_PASSES[this.pass++ % DMTX_PASSES.length];
+    const gray = rgbaToGray(img.data, out, out);
+    const sc = scale(gray, out, out, Math.min(1, p.size / out));
+    const f = applyFilter(sc, p.filter);
+    const text = await dmtxDecodeGray(f.data, f.w, f.h, { timeoutMs: 120 });
+    if (text) this.onCode?.(text);
   }
 }
