@@ -12,6 +12,9 @@
   --err: #c9302c;
   --radius: 16px;
   --shadow: 0 1px 2px rgba(16, 32, 28, .06), 0 4px 16px rgba(16, 32, 28, .05);
+  --top-bg: #f3f5f4;
+  --scan-bg: #dcece6;
+  --scan-top: #0f6b5c;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -25,6 +28,9 @@
     --accent-ink: #06231d;
     --accent-soft: #1c302b;
     --shadow: none;
+    --top-bg: #0e1412;
+    --scan-bg: #0b211c;
+    --scan-top: #145a4d;
   }
 }
 
@@ -173,7 +179,7 @@ main { padding: 0 12px; display: grid; grid-template-columns: minmax(0, 1fr); ga
 }
 
 /* ручной ввод */
-.manual { margin-top: 12px; }
+.manual { margin-top: 10px; }
 .manual .row { display: flex; gap: 8px; margin-top: 4px; }
 input[type="text"], input[type="email"] {
   flex: 1; min-width: 0; min-height: 48px; font: inherit; font-size: 16px; /* 16px — без автозума iOS */
@@ -203,7 +209,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .hist-info span { overflow-wrap: anywhere; }
 .hist-actions { display: flex; gap: 6px; flex: none; }
 
-.privacy { text-align: center; padding: 4px 16px 8px; }
+.foot { text-align: center; padding: 2px 16px 10px; font-variant-numeric: tabular-nums; }
 
 /* нижняя панель */
 .bar {
@@ -238,9 +244,6 @@ dialog.sheet[open] { animation: up .18s ease-out; }
 #send-note { margin-top: 8px; color: var(--dup); }
 
 /* фото */
-.photo-row { margin-top: 10px; }
-.photo-btn { cursor: pointer; }
-.photo-btn.busy { opacity: .7; pointer-events: none; }
 
 /* пауза распознавания */
 .scan-paused {
@@ -252,4 +255,46 @@ dialog.sheet[open] { animation: up .18s ease-out; }
 .scan-paused b { font-size: 16px; }
 .scan-paused span { font-size: 13px; opacity: .85; max-width: 280px; }
 
-.version { text-align: center; padding: 0 16px 12px; font-variant-numeric: tabular-nums; opacity: .8; }
+
+/* панель инструментов под камерой */
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.tools .btn { min-height: 46px; padding: 0 10px; font-size: 15px; }
+.tools .btn svg { width: 20px; height: 20px; flex: none; }
+.btn.on { background: var(--accent); color: var(--accent-ink); }
+.btn.busy { pointer-events: none; }
+.btn.busy svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn, .chip, .icon-btn { touch-action: manipulation; }
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; opacity: 0;
+}
+
+/* сворачиваемая история */
+.fold { padding: 0; }
+.fold summary {
+  list-style: none; display: flex; align-items: center; gap: 10px; padding: 14px; cursor: pointer; min-height: 52px;
+}
+.fold summary::-webkit-details-marker { display: none; }
+.fold-title { font-weight: 650; font-size: 17px; }
+.fold-count { color: var(--muted); font-size: 14px; margin-right: auto; }
+.chev { width: 22px; height: 22px; color: var(--muted); transition: transform .2s; }
+.fold[open] .chev { transform: rotate(180deg); }
+.fold-note { padding: 0 14px; }
+.fold .history { margin: 4px 14px 6px; }
+
+/* режим сканера: интерфейс немного меняет цвет */
+body, .top, .bar { transition: background-color .3s, color .3s; }
+.sub-live { display: none; align-items: center; gap: 6px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #7dffb0; box-shadow: 0 0 0 0 rgba(125, 255, 176, .7); animation: pulse 1.6s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(125, 255, 176, 0); } 100% { box-shadow: 0 0 0 0 rgba(125, 255, 176, 0); } }
+body.scanning { background: var(--scan-bg); --top-bg: var(--scan-top); }
+body.scanning .top { background: var(--scan-top); color: #fff; }
+body.scanning .top .sub, body.scanning .counter span { color: rgba(255, 255, 255, .82); }
+body.scanning .counter b { color: #fff; }
+body.scanning .sub-idle { display: none; }
+body.scanning .sub-live { display: flex; }
+body.scanning .brand-mark { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
+body.scanning .viewport { box-shadow: 0 0 0 3px var(--accent); }
+body.scanning .bar { background: var(--scan-bg); }
+@media (prefers-reduced-motion: reduce) { .live-dot, .btn.busy svg { animation: none; } }

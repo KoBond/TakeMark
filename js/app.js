@@ -92,12 +92,15 @@ function toast(kind, text, action) {
   toastTimer = setTimeout(() => t.classList.remove('show'), action ? 5000 : 2200);
 }
 
+let flashTimer = null;
 function feedback(kind, text, showToast = true) {
   if (showToast) toast(kind, text);
   const vp = $('#viewport');
   vp.classList.remove('flash-ok', 'flash-dup', 'flash-err');
   void vp.offsetWidth;
   vp.classList.add('flash-' + kind);
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => vp.classList.remove('flash-ok', 'flash-dup', 'flash-err'), 600);
   if (kind === 'ok') { beep(1180, 90); vibrate(50); }
   if (kind === 'dup') { beep(520, 90); beep(520, 90, 140); vibrate([40, 60, 40]); }
   if (kind === 'err') { beep(260, 160); vibrate(120); }
@@ -198,6 +201,7 @@ function render() {
 function renderHistory() {
   const past = state.sessions.filter(s => s.closedAt);
   $('#history-card').hidden = past.length === 0;
+  $('#history-count').textContent = past.length ? `${past.length} ${plural(past.length, 'сессия', 'сессии', 'сессий')}` : '';
   const ul = $('#history');
   ul.replaceChildren();
   for (const s of past) {
@@ -419,6 +423,7 @@ async function startScan() {
 
 function stopScan() {
   scanner?.stop();
+  setScanLook();
   $('#scan-paused').hidden = true;
   $('#viewport').classList.remove('live');
   $('#scan-idle').hidden = false;
@@ -459,6 +464,17 @@ function applyPreviewState() {
   const paused = !!scanner?.running && !previewVisible;
   $('#scan-paused').hidden = !paused;
   if (scanner?.running) $('#scan-controls').hidden = paused;
+  setScanLook();
+}
+
+/** Режим сканера заметен по цвету интерфейса: активен — тонированный фон и метка в шапке. */
+function setScanLook() {
+  const live = !!scanner?.running;
+  const active = live && previewVisible;
+  document.body.classList.toggle('scanning', active);
+  document.body.classList.toggle('scan-paused-state', live && !active);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = getComputedStyle(document.body).getPropertyValue('--top-bg').trim() || '#0f6b5c';
 }
 
 function watchPreview() {
@@ -487,6 +503,10 @@ function watchPreview() {
 
 /* ---------- распознавание по фото ---------- */
 
+const PHOTO_MAX_SIDE = 1600;
+let photoBusy = false;
+let resumeScanAfterPhoto = false;
+
 function loadImage(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -497,40 +517,104 @@ function loadImage(file) {
   });
 }
 
-async function onPhoto(file) {
-  if (!file) return;
+function setPhotoBusy(on, text) {
+  photoBusy = on;
+  const btn = $('#btn-photo');
+  btn.classList.toggle('busy', on);
+  btn.setAttribute('aria-busy', on ? 'true' : 'false');
+  $('#photo-label').textContent = on ? (text || 'Распознаю…') : 'Фото марки';
+}
+
+/** Нажатие «Фото марки»: освобождаем камеру и сразу открываем съёмку. */
+function onPhotoButton() {
+  if (photoBusy) return;
   unlockAudio();
-  const label = $('#photo-label');
-  const btn = $('.photo-btn');
-  btn.classList.add('busy');
-  label.textContent = 'Распознаю фото…';
+  if (scanner?.running) { resumeScanAfterPhoto = true; stopScan(); }
+  const input = $('#photo-input');
+  input.value = '';
+  input.click(); // синхронно в обработчике нажатия — иначе iOS не откроет камеру
+}
+
+/** Распознавание фото в отдельном потоке (libdmtx); zxing — коротко в конце, если не вышло. */
+function decodePhotoInWorker(gray, w, h, onProgress) {
+  return new Promise((resolve, reject) => {
+    let worker;
+    try { worker = new Worker(new URL('./dmtx-worker.js', import.meta.url), { type: 'module' }); }
+    catch (e) { reject(e); return; }
+    const done = (v, err) => { worker.terminate(); err ? reject(err) : resolve(v); };
+    const guard = setTimeout(() => done(null), 20000);
+    worker.onerror = (e) => { clearTimeout(guard); done(null, e); };
+    worker.onmessage = (e) => {
+      const m = e.data;
+      if (m.type === 'progress') { onProgress?.(m.n); return; }
+      if (m.type === 'photo') { clearTimeout(guard); done(m.text); }
+    };
+    worker.postMessage({ type: 'photo', id: 1, gray: gray.buffer, w, h, budgetMs: 12000 }, [gray.buffer]);
+  });
+}
+
+async function zxingQuick(canvas) {
+  let read;
+  try { read = await loadDecoder(); } catch { return null; }
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height, s = Math.min(w, h);
+  const areas = [[0, 0, w, h], [(w - s * 0.6) / 2, (h - s * 0.6) / 2, s * 0.6, s * 0.6]];
+  for (const [x, y, aw, ah] of areas) {
+    const texts = await read(ctx.getImageData(x | 0, y | 0, aw | 0, ah | 0));
+    const t = texts.find(t => parseCode(t).ok);
+    if (t) return t;
+    await new Promise(r => setTimeout(r, 0));
+  }
+  return null;
+}
+
+async function onPhoto(file) {
+  if (!file) { if (resumeScanAfterPhoto) { resumeScanAfterPhoto = false; startScan(); } return; }
+  setPhotoBusy(true, 'Открываю фото…');
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); // сначала показать состояние
   try {
     const img = await loadImage(file);
-    const maxSide = 2000;
-    const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const k = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
     const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, w, h);
     const gray = rgbaToGray(ctx.getImageData(0, 0, w, h).data, w, h);
-    let zxingRead = null;
-    try { zxingRead = await loadDecoder(); } catch { /* только libdmtx */ }
-    await loadDmtx();
-    const r = await decodePhoto(gray, w, h, {
-      zxingRead,
-      budgetMs: 15000,
-      onProgress: (n) => { label.textContent = `Распознаю фото… (${n})`; },
-    });
-    if (r) addCode(r.text, 'photo');
+    setPhotoBusy(true, 'Распознаю…');
+
+    let text = null;
+    try {
+      text = await decodePhotoInWorker(gray, w, h, (n) => setPhotoBusy(true, `Распознаю… ${n}`));
+    } catch {
+      // Worker недоступен — старый путь в основном потоке
+      await loadDmtx();
+      const r = await decodePhoto(rgbaToGray(ctx.getImageData(0, 0, w, h).data, w, h), w, h, { budgetMs: 10000 });
+      text = r?.text || null;
+    }
+    if (!text) text = await zxingQuick(c);
+    if (text) addCode(text, 'photo');
     else feedback('err', 'Код на фото не прочитан. Снимите ближе, код в центре, без бликов — или введите вручную.');
   } catch (err) {
     feedback('err', err?.message || 'Ошибка распознавания фото');
   } finally {
-    btn.classList.remove('busy');
-    label.textContent = 'Сфотографировать марку';
+    setPhotoBusy(false);
     $('#photo-input').value = '';
+    if (resumeScanAfterPhoto) { resumeScanAfterPhoto = false; startScan(); }
   }
+}
+
+/* ---------- ручной ввод (свёрнут) ---------- */
+
+function toggleManual(open) {
+  const form = $('#manual');
+  const btn = $('#btn-manual');
+  open = open ?? form.hidden;
+  form.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+  btn.classList.toggle('on', open);
+  if (open) $('#manual-input').focus();
+  else $('#manual-error').hidden = true;
 }
 
 /* ---------- iPhone: подсказка «На экран Домой» ---------- */
@@ -575,7 +659,10 @@ async function init() {
     const on = !scanner?.torchOn;
     try { if (await scanner.setTorch(on)) $('#btn-torch').classList.toggle('on', on); } catch { /* */ }
   };
+  $('#btn-photo').onclick = onPhotoButton;
   $('#photo-input').onchange = (e) => onPhoto(e.target.files?.[0]);
+  $('#photo-input').addEventListener('cancel', () => onPhoto(null)); // съёмку отменили
+  $('#btn-manual').onclick = () => toggleManual();
   $('#zoom').oninput = (e) => scanner?.setZoom(+e.target.value).catch(() => {});
 
   $('#manual').onsubmit = (e) => {
@@ -608,7 +695,7 @@ async function init() {
     if (document.hidden && scanner?.running) stopScan();
   });
 
-  $('#app-version').textContent = `версия ${APP_VERSION} от ${APP_DATE}`;
+  $('#app-version').textContent = `${APP_VERSION} · ${APP_DATE}`;
 
   if ('serviceWorker' in navigator) {
     // новая версия установилась в фоне — предлагаем перезагрузить

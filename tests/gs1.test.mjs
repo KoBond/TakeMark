@@ -67,6 +67,8 @@ console.log('Версия');
   const { APP_VERSION } = await import('../js/version.js');
   const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
   check('sw.js VERSION = takemark-' + APP_VERSION, sw.includes(`const VERSION = 'takemark-${APP_VERSION}'`));
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  check('index.html показывает ' + APP_VERSION, html.includes(`id="app-version">${APP_VERSION}<`));
 }
 
 console.log(`\n${pass} ok, ${fail} fail`);

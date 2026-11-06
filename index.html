@@ -22,7 +22,8 @@
       <span class="brand-mark" aria-hidden="true"></span>
       <div>
         <h1>TakeMark</h1>
-        <p class="sub">Марки Честный ЗНАК · МДЛП</p>
+        <p class="sub sub-idle">Марки Честный ЗНАК · МДЛП</p>
+        <p class="sub sub-live"><i class="live-dot"></i>Идёт сканирование</p>
       </div>
     </div>
     <div class="counter" aria-live="polite"><b id="count">0</b><span>марок</span></div>
@@ -67,21 +68,23 @@
       </div>
       <div id="toast" class="toast" role="status" aria-live="assertive"></div>
 
-      <div class="photo-row">
-        <label class="btn btn-secondary btn-block photo-btn" for="photo-input">
+      <div class="tools">
+        <button id="btn-photo" class="btn btn-secondary" type="button" title="Для мелких точечных кодов на крышках и флаконах">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-          <span id="photo-label">Сфотографировать марку</span>
-        </label>
-        <input id="photo-input" type="file" accept="image/*" capture="environment" hidden>
-        <p class="muted small center">Для мелких точечных кодов на крышках и флаконах: фото чётче видео</p>
+          <span id="photo-label">Фото марки</span>
+        </button>
+        <button id="btn-manual" class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="manual">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 10h1M11 10h1M15 10h2M7 14h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Ввести код
+        </button>
       </div>
+      <input id="photo-input" class="visually-hidden" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
 
-      <form id="manual" class="manual" autocomplete="off">
-        <label for="manual-input" class="small muted">Ручной ввод, если марка не читается</label>
+      <form id="manual" class="manual" autocomplete="off" hidden>
         <div class="row">
           <input id="manual-input" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
-                 placeholder="01046…21… или полный код">
-          <button class="btn btn-secondary" type="submit">Добавить</button>
+                 placeholder="01046…21… или полный код" aria-label="Код марки">
+          <button class="btn btn-primary" type="submit">Добавить</button>
         </div>
         <p id="manual-error" class="error small" hidden></p>
       </form>
@@ -102,15 +105,18 @@
       <p id="empty" class="empty muted">Список пуст. Отсканируйте первую марку.</p>
     </section>
 
-    <!-- История -->
-    <section class="card" id="history-card" hidden>
-      <h2>История</h2>
-      <p class="muted small">Хранятся 3 последние сессии, включая текущую.</p>
+    <!-- История (свёрнута) -->
+    <details class="card fold" id="history-card" hidden>
+      <summary>
+        <span class="fold-title">История</span>
+        <span id="history-count" class="fold-count"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </summary>
+      <p class="muted small fold-note">Хранятся 3 последние сессии, включая текущую.</p>
       <ul id="history" class="history"></ul>
-    </section>
+    </details>
 
-    <p class="privacy muted small">Данные хранятся только на этом устройстве и никуда не передаются без вашего действия.</p>
-    <p class="version muted small">TakeMark <span id="app-version"></span></p>
+    <p class="foot muted small">Данные хранятся только на этом устройстве · TakeMark <span id="app-version">1.4.0</span></p>
   </main>
 
   <footer class="bar">

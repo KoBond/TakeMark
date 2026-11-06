@@ -1,7 +1,7 @@
 // Service Worker: офлайн-работа TakeMark.
 // Должна совпадать с APP_VERSION в js/version.js (проверяет тест).
 // Смена версии заставляет телефоны скачать обновлённые файлы.
-const VERSION = 'takemark-1.3.0';
+const VERSION = 'takemark-1.4.0';
 const RUNTIME = 'takemark-runtime';
 
 const SHELL = [
@@ -84,16 +84,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Файлы приложения: отдаём из кеша и обновляем в фоне
+  // Файлы приложения: сначала сеть (новая версия видна сразу), без сети или при медленной сети — кеш
   if (url.origin === self.location.origin) {
     event.respondWith((async () => {
       const cache = await caches.open(VERSION);
-      const cached = await cache.match(req, { ignoreSearch: true });
-      const network = fetch(req).then(res => {
+      const network = fetch(req, { cache: 'no-cache' }).then(res => {
         if (res.ok) cache.put(req, res.clone());
         return res;
-      }).catch(() => null);
-      return cached || (await network) || new Response('', { status: 504 });
+      });
+      const cached = await cache.match(req, { ignoreSearch: true });
+      if (!cached) return network.catch(() => new Response('', { status: 504 }));
+      // ждём сеть не дольше 2,5 с, иначе отдаём кеш (сеть всё равно обновит его в фоне)
+      const timeout = new Promise(resolve => setTimeout(() => resolve(cached), 2500));
+      return Promise.race([network.catch(() => cached), timeout]);
     })());
   }
 });
