@@ -19,7 +19,8 @@ const MAIN_PASSES = [
   { size: 360, filter: 'blur' },
 ];
 
-const CDN_JS = 'https://cdn.jsdelivr.net/npm/zxing-wasm@2/dist/iife/reader/index.js';
+export const ZXING_VERSION = '2.2.4'; // та же версия — в tools/vendor-zxing.sh и в workflow
+const CDN_JS = `https://cdn.jsdelivr.net/npm/zxing-wasm@${ZXING_VERSION}/dist/iife/reader/index.js`;
 
 let decoderPromise = null;
 

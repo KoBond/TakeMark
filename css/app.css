@@ -251,3 +251,5 @@ dialog.sheet[open] { animation: up .18s ease-out; }
 }
 .scan-paused b { font-size: 16px; }
 .scan-paused span { font-size: 13px; opacity: .85; max-width: 280px; }
+
+.version { text-align: center; padding: 0 16px 12px; font-variant-numeric: tabular-nums; opacity: .8; }

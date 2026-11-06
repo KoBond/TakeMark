@@ -61,5 +61,13 @@ check('mailto: тело содержит коды', decodeURIComponent(m.split('
 check('валидный email', isEmail('a.b+c@mail.ru'));
 check('невалидный email', !isEmail('a@b') && !isEmail('a b@c.ru') && !isEmail(''));
 
+console.log('Версия');
+{
+  const { readFileSync } = await import('fs');
+  const { APP_VERSION } = await import('../js/version.js');
+  const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  check('sw.js VERSION = takemark-' + APP_VERSION, sw.includes(`const VERSION = 'takemark-${APP_VERSION}'`));
+}
+
 console.log(`\n${pass} ok, ${fail} fail`);
 if (fail) process.exit(1);

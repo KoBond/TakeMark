@@ -1,0 +1,14 @@
+# Проверка разбора кодов при каждом push. Ничего не устанавливает и не публикует.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: node --version && node tests/gs1.test.mjs

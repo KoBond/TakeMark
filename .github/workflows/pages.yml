@@ -1,11 +1,10 @@
-# Публикация TakeMark на GitHub Pages.
-# При каждой сборке библиотека распознавания zxing-wasm копируется в ./vendor,
-# чтобы приложение не зависело от CDN и работало офлайн.
-name: Deploy to GitHub Pages
+# Запасной способ публикации через GitHub Actions. Запускается ТОЛЬКО вручную:
+# вкладка Actions → «Deploy to GitHub Pages (Actions)» → Run workflow.
+# Нужен, только если в Settings → Pages → Source выбрано «GitHub Actions».
+# Основной способ — Source: «Deploy from a branch» (см. README), этот workflow тогда не нужен.
+name: Deploy to GitHub Pages (Actions)
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -13,48 +12,42 @@ permissions:
   pages: write
   id-token: write
 
+# Не прерываем идущую публикацию: прерванная публикация может «зависнуть» и блокировать следующие.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Vendor zxing-wasm
-        run: |
-          set -e
-          mkdir -p /tmp/zx && cd /tmp/zx
-          npm init -y >/dev/null
-          npm i zxing-wasm@2 --no-audit --no-fund
-          D=node_modules/zxing-wasm/dist
-          JS=$(find "$D" -path '*iife*' -path '*reader*' -name 'index.js' | head -1)
-          WASM=$(find "$D" -name 'zxing_reader.wasm' | head -1)
-          test -n "$JS" && test -n "$WASM"
-          cd "$GITHUB_WORKSPACE"
-          mkdir -p vendor
-          cp "/tmp/zx/$JS" vendor/zxing-reader.js
-          cp "/tmp/zx/$WASM" vendor/zxing_reader.wasm
-          echo '["zxing-reader.js","zxing_reader.wasm"]' > vendor/files.json
-          ls -la vendor
-
-      - name: Run parser tests
+      - name: Tests
         run: node tests/gs1.test.mjs
+
+      - name: Vendor zxing-wasm (curl, без npm)
+        run: |
+          if [ ! -f vendor/files.json ]; then sh tools/vendor-zxing.sh; fi
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+          cp -r index.html manifest.webmanifest sw.js css js icons wasm vendor _site/
+          rm -rf _site/wasm/src
+          ls -R _site | head -50
 
       - uses: actions/configure-pages@v5
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 300000   # 5 минут вместо 10, чтобы не ждать «зависшую» публикацию

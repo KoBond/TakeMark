@@ -2,6 +2,7 @@ import { parseCode } from './gs1.js';
 import { store, requestPersistence } from './storage.js';
 import { Scanner, loadDecoder } from './scanner.js';
 import { loadDmtx } from './dmtx.js';
+import { APP_VERSION, APP_DATE } from './version.js';
 import { decodePhoto } from './photo.js';
 import { rgbaToGray } from './imgproc.js';
 import { makeFile, mailtoUrl, isEmail, formatDateTime, formatTime, fileName, buildText } from './export.js';
@@ -607,7 +608,15 @@ async function init() {
     if (document.hidden && scanner?.running) stopScan();
   });
 
+  $('#app-version').textContent = `версия ${APP_VERSION} от ${APP_DATE}`;
+
   if ('serviceWorker' in navigator) {
+    // новая версия установилась в фоне — предлагаем перезагрузить
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return;
+      toast('info', 'Доступна новая версия приложения', { label: 'Обновить', fn: () => location.reload() });
+    });
     navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW', err));
   }
   // загружаем декодер заранее, чтобы он попал в кеш для офлайна

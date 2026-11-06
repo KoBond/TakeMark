@@ -1,6 +1,7 @@
 // Service Worker: офлайн-работа TakeMark.
-// При изменении файлов приложения увеличьте VERSION.
-const VERSION = 'takemark-v3';
+// Должна совпадать с APP_VERSION в js/version.js (проверяет тест).
+// Смена версии заставляет телефоны скачать обновлённые файлы.
+const VERSION = 'takemark-1.3.0';
 const RUNTIME = 'takemark-runtime';
 
 const SHELL = [
@@ -8,6 +9,7 @@ const SHELL = [
   './index.html',
   './css/app.css',
   './js/app.js',
+  './js/version.js',
   './js/gs1.js',
   './js/storage.js',
   './js/scanner.js',

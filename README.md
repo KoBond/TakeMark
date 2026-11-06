@@ -18,24 +18,39 @@
 
 ## Публикация на GitHub Pages
 
-1. Создайте репозиторий на GitHub и загрузите в него содержимое этой папки (вместе со скрытой папкой `.github`).
-2. В репозитории: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. Сделайте push в ветку `main` (или запустите workflow вручную на вкладке **Actions**).
-4. Через 1–2 минуты приложение будет доступно по адресу `https://<логин>.github.io/<репозиторий>/`.
+Основной способ — без сборки, GitHub просто раздаёт файлы из ветки:
 
-Сборка (`.github/workflows/pages.yml`) скачивает библиотеку распознавания **zxing-wasm** в папку `vendor/`,
-прогоняет тесты парсера и публикует сайт. Если папки `vendor/` нет (например, при публикации из ветки без Actions),
-приложение загрузит библиотеку с CDN jsDelivr — тоже работает, но первый запуск требует доступа к CDN.
+1. Загрузите содержимое папки в репозиторий (вместе со скрытыми `.github` и `.nojekyll`).
+2. **Settings → Pages → Build and deployment → Source: «Deploy from a branch»**, ветка `main`, папка `/ (root)` → Save.
+3. Через 1–2 минуты сайт доступен по адресу `https://<логин>.github.io/<репозиторий>/`.
+   Ход публикации виден на вкладке **Actions** (встроенный «pages build and deployment»).
+
+Библиотека распознавания zxing-wasm при этом загружается с CDN jsDelivr при первом запуске и дальше
+хранится в кеше телефона (офлайн работает). Чтобы не зависеть от CDN, один раз положите её в репозиторий:
+`sh tools/vendor-zxing.sh`, затем закоммитьте папку `vendor/` (нужны только curl и tar).
+
+### Если публикация зависла
+
+- Отмените зависший запуск на вкладке **Actions** (… → Cancel workflow) и подождите 5–10 минут.
+- Проверьте, что в **Settings → Pages** выбран один способ публикации. Если там «GitHub Actions», а не «Deploy from a branch»,
+  либо переключите на ветку (рекомендуется), либо запускайте вручную workflow **Deploy to GitHub Pages (Actions)**.
+- Если запуск не отменяется больше суток — это сбой на стороне GitHub Pages; помогает принудительная пересборка:
+  `gh api -X POST /repos/<логин>/<репозиторий>/pages/builds` или обращение в поддержку GitHub.
+
+Предупреждение `The punycode module is deprecated` в логах Actions выдаёт сам GitHub в своих служебных действиях
+(деплой Pages работает на Node.js 24); на сайт оно не влияет. В наших workflow npm больше не используется.
 
 ## Проверка
 
-- Тесты разбора кодов: `node tests/gs1.test.mjs`
+- Тесты разбора кодов: `node tests/gs1.test.mjs` (запускаются на GitHub при каждом push — workflow **Tests**)
 - Локальный запуск: `python3 -m http.server 8000` → `http://localhost:8000`.
   Камера на телефоне работает только по HTTPS, поэтому проверять сканирование удобнее сразу на GitHub Pages.
 
 ## Обновление приложения
 
-После изменения файлов увеличьте `VERSION` в `sw.js` (например, `takemark-v3`), чтобы телефоны получили свежую версию.
+Версия приложения задаётся в `js/version.js` (`APP_VERSION`, показывается внизу экрана) и в `sw.js` (`VERSION = 'takemark-<версия>'`).
+Меняйте обе при каждом выпуске — тест проверяет, что они совпадают. После публикации телефон скачает новую версию
+и покажет «Доступна новая версия — Обновить».
 
 ## Структура
 
@@ -43,6 +58,7 @@
 index.html               разметка
 css/app.css              стили (светлая и тёмная тема)
 js/app.js                интерфейс, сессии, отправка
+js/version.js            номер версии приложения
 js/gs1.js                разбор GS1, отсечение криптохвоста, валидация GTIN
 js/scanner.js            камера + zxing-wasm + libdmtx
 js/dmtx.js               обёртка декодера libdmtx (WebAssembly)
@@ -57,6 +73,8 @@ sw.js                    офлайн-кеш
 manifest.webmanifest     установка на экран «Домой»
 icons/                   иконки
 tests/gs1.test.mjs       тесты парсера и выгрузки
+tools/vendor-zxing.sh    скачать zxing-wasm в vendor/ (curl, без npm)
+.github/workflows/       tests.yml — тесты; pages.yml — запасная публикация через Actions (ручной запуск)
 docs/brief.md            бриф
 ```
 
@@ -71,7 +89,7 @@ docs/brief.md            бриф
 
 | Компонент | Лицензия | Как попадает в сайт |
 |---|---|---|
-| [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (на базе [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp), Apache-2.0) | MIT | скачивается при сборке в `vendor/` или с CDN |
+| [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (на базе [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp), Apache-2.0) | MIT | CDN jsDelivr (версия 2.2.4) или `vendor/` после `tools/vendor-zxing.sh` |
 | [libdmtx](https://github.com/dmtx/libdmtx) | BSD-2-Clause | `wasm/dmtx.wasm`, текст лицензии — `wasm/LICENSE.libdmtx.txt` |
 
 Пересборка `wasm/dmtx.wasm`: `sh wasm/src/build.sh` (нужны clang и wasm-ld).
