@@ -46,6 +46,7 @@ js/app.js                интерфейс, сессии, отправка
 js/gs1.js                разбор GS1, отсечение криптохвоста, валидация GTIN
 js/scanner.js            камера + zxing-wasm + libdmtx
 js/dmtx.js               обёртка декодера libdmtx (WebAssembly)
+js/dmtx-worker.js        libdmtx в отдельном потоке при живом сканировании
 js/imgproc.js            обработка изображения: «склеивание» точек, размытие, масштаб
 js/photo.js              распознавание по фото
 wasm/dmtx.wasm           libdmtx, собранный в WebAssembly (~44 КБ)
@@ -61,7 +62,10 @@ docs/brief.md            бриф
 
 ## Настройки в коде
 
-`js/app.js`: `MAX_SESSIONS` (3), `MAX_EMAILS` (5), `REPEAT_MS` (2500 мс — пауза перед повторным сигналом для марки в кадре).
+`js/app.js`: `MAX_SESSIONS` (3), `MAX_EMAILS` (5), `REPEAT_MS` (2500 мс — пауза перед повторным сигналом для марки в кадре),
+`PAUSE_BELOW` / `RESUME_ABOVE` (1/3 и 2/3 — распознавание ставится на паузу, когда окно камеры видно меньше чем на 1/3, и возобновляется, когда видно больше 2/3).
+
+`js/scanner.js`: `ZXING_INTERVAL` (120 мс), `DMTX_INTERVAL` (300 мс), `DMTX_AFTER_MISS` (600 мс — libdmtx подключается, если zxing столько времени ничего не находит).
 
 ## Сторонние компоненты
 

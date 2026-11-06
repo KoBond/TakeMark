@@ -395,6 +395,7 @@ async function startScan() {
   });
   try {
     await scanner.start();
+    applyPreviewState();
     $('#viewport').classList.add('live');
     $('#scan-idle').hidden = true;
     $('#scan-controls').hidden = false;
@@ -417,6 +418,7 @@ async function startScan() {
 
 function stopScan() {
   scanner?.stop();
+  $('#scan-paused').hidden = true;
   $('#viewport').classList.remove('live');
   $('#scan-idle').hidden = false;
   $('#scan-controls').hidden = true;
@@ -435,6 +437,51 @@ function cameraErrorText(err) {
   if (name === 'NotReadableError') return 'Камера занята другим приложением. Закройте его и попробуйте снова.';
   return (err?.message || 'Не удалось запустить сканер') +
     (navigator.onLine ? '' : '. Нет интернета: при первом запуске сканеру нужна сеть, чтобы загрузить декодер.');
+}
+
+/* ---------- пауза, когда окно камеры прокручено за экран ---------- */
+
+const PAUSE_BELOW = 1 / 3;  // видно меньше 1/3 (скрыто больше 2/3) — обработка на паузе
+const RESUME_ABOVE = 2 / 3; // видно больше 2/3 — обработка снова идёт
+let previewVisible = true;
+
+/** Доля видимой части окна камеры между шапкой и нижней кнопкой. */
+function visibleShare(entry) {
+  const h = entry.boundingClientRect.height;
+  if (!h) return 0;
+  const rootH = entry.rootBounds?.height || h;
+  return entry.intersectionRect.height / Math.min(h, rootH); // если окно выше экрана — считаем от экрана
+}
+
+function applyPreviewState() {
+  scanner?.setActive(previewVisible);
+  const paused = !!scanner?.running && !previewVisible;
+  $('#scan-paused').hidden = !paused;
+  if (scanner?.running) $('#scan-controls').hidden = paused;
+}
+
+function watchPreview() {
+  if (!('IntersectionObserver' in window)) return;
+  const vp = $('#viewport');
+  let io = null;
+  const observe = () => {
+    io?.disconnect();
+    const top = $('.top').offsetHeight;
+    const bottom = $('.bar').offsetHeight;
+    const thresholds = [...Array.from({ length: 21 }, (_, i) => i / 20), PAUSE_BELOW, RESUME_ABOVE].sort((a, b) => a - b);
+    io = new IntersectionObserver((entries) => {
+      const share = visibleShare(entries[entries.length - 1]);
+      if (previewVisible && share < PAUSE_BELOW) previewVisible = false;
+      else if (!previewVisible && share > RESUME_ABOVE) previewVisible = true;
+      else return;
+      applyPreviewState();
+    }, { rootMargin: `-${top}px 0px -${bottom}px 0px`, threshold: thresholds });
+    io.observe(vp);
+  };
+  observe();
+  let t = null;
+  addEventListener('resize', () => { clearTimeout(t); t = setTimeout(observe, 250); });
+  $('#scan-paused').onclick = () => vp.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 /* ---------- распознавание по фото ---------- */
@@ -518,6 +565,7 @@ async function init() {
   }
   render();
   setupIosHint();
+  watchPreview();
   requestPersistence();
 
   $('#btn-scan').onclick = startScan;
