@@ -1,7 +1,7 @@
 // Service Worker: офлайн-работа TakeMark.
-// Должна совпадать с APP_VERSION в js/version.js (проверяет тест).
+// Должна совпадать с версией в index.html (#app-version и var V) — это проверяет тест.
 // Смена версии заставляет телефоны скачать обновлённые файлы.
-const VERSION = 'takemark-1.4.0';
+const VERSION = 'takemark-1.4.1';
 const RUNTIME = 'takemark-runtime';
 
 const SHELL = [
@@ -9,7 +9,6 @@ const SHELL = [
   './index.html',
   './css/app.css',
   './js/app.js',
-  './js/version.js',
   './js/gs1.js',
   './js/storage.js',
   './js/scanner.js',
@@ -30,7 +29,8 @@ const CDN_HOSTS = ['cdn.jsdelivr.net', 'fastly.jsdelivr.net', 'unpkg.com'];
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(VERSION);
-    await cache.addAll(SHELL);
+    // cache: 'reload' — мимо HTTP-кеша браузера (GitHub Pages кеширует файлы на 10 минут)
+    await cache.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })));
     // локальная копия декодера (если сборка её положила)
     try {
       const r = await fetch('./vendor/files.json', { cache: 'no-cache' });

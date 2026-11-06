@@ -2,7 +2,6 @@ import { parseCode } from './gs1.js';
 import { store, requestPersistence } from './storage.js';
 import { Scanner, loadDecoder } from './scanner.js';
 import { loadDmtx } from './dmtx.js';
-import { APP_VERSION, APP_DATE } from './version.js';
 import { decodePhoto } from './photo.js';
 import { rgbaToGray } from './imgproc.js';
 import { makeFile, mailtoUrl, isEmail, formatDateTime, formatTime, fileName, buildText } from './export.js';
@@ -522,17 +521,15 @@ function setPhotoBusy(on, text) {
   const btn = $('#btn-photo');
   btn.classList.toggle('busy', on);
   btn.setAttribute('aria-busy', on ? 'true' : 'false');
-  $('#photo-label').textContent = on ? (text || 'Распознаю…') : 'Фото марки';
+  $('#photo-label').textContent = on ? (text || 'Распознаю фото…') : 'Сфотографировать марку';
 }
 
-/** Нажатие «Фото марки»: освобождаем камеру и сразу открываем съёмку. */
-function onPhotoButton() {
-  if (photoBusy) return;
+/** Нажатие «Сфотографировать марку» (label для input): освобождаем камеру, съёмку откроет сам браузер. */
+function onPhotoButton(e) {
+  if (photoBusy) { e.preventDefault(); return; }
   unlockAudio();
   if (scanner?.running) { resumeScanAfterPhoto = true; stopScan(); }
-  const input = $('#photo-input');
-  input.value = '';
-  input.click(); // синхронно в обработчике нажатия — иначе iOS не откроет камеру
+  $('#photo-input').value = '';
 }
 
 /** Распознавание фото в отдельном потоке (libdmtx); zxing — коротко в конце, если не вышло. */
@@ -581,11 +578,11 @@ async function onPhoto(file) {
     const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, w, h);
     const gray = rgbaToGray(ctx.getImageData(0, 0, w, h).data, w, h);
-    setPhotoBusy(true, 'Распознаю…');
+    setPhotoBusy(true, 'Распознаю фото…');
 
     let text = null;
     try {
-      text = await decodePhotoInWorker(gray, w, h, (n) => setPhotoBusy(true, `Распознаю… ${n}`));
+      text = await decodePhotoInWorker(gray, w, h, (n) => setPhotoBusy(true, `Распознаю фото… (${n})`));
     } catch {
       // Worker недоступен — старый путь в основном потоке
       await loadDmtx();
@@ -602,19 +599,6 @@ async function onPhoto(file) {
     $('#photo-input').value = '';
     if (resumeScanAfterPhoto) { resumeScanAfterPhoto = false; startScan(); }
   }
-}
-
-/* ---------- ручной ввод (свёрнут) ---------- */
-
-function toggleManual(open) {
-  const form = $('#manual');
-  const btn = $('#btn-manual');
-  open = open ?? form.hidden;
-  form.hidden = !open;
-  btn.setAttribute('aria-expanded', String(open));
-  btn.classList.toggle('on', open);
-  if (open) $('#manual-input').focus();
-  else $('#manual-error').hidden = true;
 }
 
 /* ---------- iPhone: подсказка «На экран Домой» ---------- */
@@ -659,10 +643,9 @@ async function init() {
     const on = !scanner?.torchOn;
     try { if (await scanner.setTorch(on)) $('#btn-torch').classList.toggle('on', on); } catch { /* */ }
   };
-  $('#btn-photo').onclick = onPhotoButton;
+  $('#btn-photo').addEventListener('click', onPhotoButton);
   $('#photo-input').onchange = (e) => onPhoto(e.target.files?.[0]);
   $('#photo-input').addEventListener('cancel', () => onPhoto(null)); // съёмку отменили
-  $('#btn-manual').onclick = () => toggleManual();
   $('#zoom').oninput = (e) => scanner?.setZoom(+e.target.value).catch(() => {});
 
   $('#manual').onsubmit = (e) => {
@@ -694,8 +677,6 @@ async function init() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && scanner?.running) stopScan();
   });
-
-  $('#app-version').textContent = `${APP_VERSION} · ${APP_DATE}`;
 
   if ('serviceWorker' in navigator) {
     // новая версия установилась в фоне — предлагаем перезагрузить

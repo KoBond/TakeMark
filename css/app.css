@@ -298,3 +298,8 @@ body.scanning .brand-mark { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
 body.scanning .viewport { box-shadow: 0 0 0 3px var(--accent); }
 body.scanning .bar { background: var(--scan-bg); }
 @media (prefers-reduced-motion: reduce) { .live-dot, .btn.busy svg { animation: none; } }
+
+/* фото и ручной ввод — прежний вид */
+.photo-row { margin-top: 10px; }
+.photo-btn { cursor: pointer; }
+.photo-btn.busy { opacity: .75; pointer-events: none; }

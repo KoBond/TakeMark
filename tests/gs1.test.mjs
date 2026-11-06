@@ -64,11 +64,13 @@ check('невалидный email', !isEmail('a@b') && !isEmail('a b@c.ru') && !
 console.log('Версия');
 {
   const { readFileSync } = await import('fs');
-  const { APP_VERSION } = await import('../js/version.js');
   const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  const APP_VERSION = sw.match(/const VERSION = 'takemark-([^']+)'/)[1];
   check('sw.js VERSION = takemark-' + APP_VERSION, sw.includes(`const VERSION = 'takemark-${APP_VERSION}'`));
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  check('index.html показывает ' + APP_VERSION, html.includes(`id="app-version">${APP_VERSION}<`));
+  check('index.html показывает ' + APP_VERSION, html.includes(`id="app-version">${APP_VERSION} ·`));
+  check('index.html: защита кеша для ' + APP_VERSION, html.includes(`var V = 'takemark-${APP_VERSION}'`));
+  check('index.html: ?v= у css и js', html.includes(`app.css?v=${APP_VERSION}`) && html.includes(`app.js?v=${APP_VERSION}`));
 }
 
 console.log(`\n${pass} ok, ${fail} fail`);
